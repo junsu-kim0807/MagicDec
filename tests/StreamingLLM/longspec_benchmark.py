@@ -1,4 +1,6 @@
 import time
+import os
+import glob
 import torch
 import sys
 sys.path.append("..")
@@ -20,10 +22,80 @@ import argparse
 from MagicDec.Engine.SnapKV.backend import LMBackend
 from MagicDec.Engine.StreamingLLM.backend_draft import LMBackend_Draft
 
+
+def resolve_checkpoint_arg(arg_value) -> Path:
+    """
+    Resolve --model/--target value to a local checkpoint file path.
+
+    Supports:
+    - direct file path (/path/to/model.pth)
+    - HF repo id (org/name), resolved from HF cache snapshots and symlinked to
+      ~/.magicdec_ckpt_tmp/<repo_name>/model.pth so engine name matching works.
+    """
+    p = Path(str(arg_value))
+    if p.is_file():
+        return p
+
+    raw = str(arg_value)
+    looks_like_repo_id = ("/" in raw) and (not raw.endswith((".pth", ".pt", ".bin", ".safetensors")))
+    if looks_like_repo_id:
+        org, name = raw.split("/", 1)
+        hub_cache = (
+            os.environ.get("HF_HUB_CACHE")
+            or os.environ.get("HUGGINGFACE_HUB_CACHE")
+            or (os.path.join(os.environ.get("HF_HOME"), "huggingface_hub") if os.environ.get("HF_HOME") else None)
+            or os.path.expanduser("~/scratch/.cache/huggingface_hub")
+        )
+
+        org_variants = [org]
+        if org.lower() != org:
+            org_variants.append(org.lower())
+        name_variants = [name]
+        if name.endswith("-Instruct"):
+            name_variants.append(name[: -len("-Instruct")])
+        if name.startswith("Meta-"):
+            name_variants.append(name[len("Meta-") :])
+        if name.startswith("Meta-") and name.endswith("-Instruct"):
+            name_variants.append(name[len("Meta-") : -len("-Instruct")])
+
+        patterns = []
+        for ov in org_variants:
+            for nv in name_variants:
+                base = os.path.join(hub_cache, f"models--{ov}--{nv}", "snapshots", "*")
+                patterns.extend([
+                    os.path.join(base, "model.pth"),
+                    os.path.join(base, "model.pt"),
+                    os.path.join(base, "pytorch_model.bin"),
+                    os.path.join(base, "pytorch_model.pt"),
+                    os.path.join(base, "pytorch_model.pth"),
+                ])
+
+        for pat in patterns:
+            matches = glob.glob(pat)
+            if matches:
+                raw_ckpt = Path(matches[0])
+                tmp_root = Path(os.environ.get("TMP_CKPT_ROOT", str(Path.home() / ".magicdec_ckpt_tmp")))
+                link_dir = tmp_root / name
+                link_dir.mkdir(parents=True, exist_ok=True)
+                link_path = link_dir / "model.pth"
+                if link_path.exists() or link_path.is_symlink():
+                    link_path.unlink()
+                os.symlink(str(raw_ckpt), str(link_path))
+                print(f"Resolved repo id {raw} -> {link_path} (raw: {raw_ckpt})")
+                return link_path
+
+        raise FileNotFoundError(
+            f"Could not resolve repo id '{raw}' from HF cache ({hub_cache}). "
+            "Expected model.pth/model.pt/pytorch_model.* in snapshots."
+        )
+
+    raise FileNotFoundError(f"Checkpoint file not found: {p}")
+
+
 parser = argparse.ArgumentParser(description='Process model configuration and partitions.')
-parser.add_argument('--model', type=Path, default=Path("/scratch/models/meta-llama/Llama-3.2-1B/model.pth"), help='model')
+parser.add_argument('--model', type=str, default="/scratch/models/meta-llama/Llama-3.2-1B/model.pth", help='model')
 # parser.add_argument('--model', type=Path, default=Path("/scratch/models/meta-llama/Meta-Llama-3.1-8B/model.pth"), help='model')
-parser.add_argument('--target', type=Path, default=Path("/scratch/models/meta-llama/Meta-Llama-3.1-8B/model.pth"), help='model')
+parser.add_argument('--target', type=str, default="/scratch/models/meta-llama/Meta-Llama-3.1-8B/model.pth", help='model')
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3.1-8B", help='model name')
 parser.add_argument('--dataset', type=str, default="pg19", help='Dataset name.')
 parser.add_argument('--draft_budget', type=int, default=1025, help='Dataset end index.')
@@ -80,8 +152,8 @@ MAX_LEN_TARGET = args.max_len
 DTYPE = torch.bfloat16
 BATCH_SIZE = args.B
 benchmark = args.benchmark
-checkpoint_path = args.target
-draft_checkpoint_path = args.model
+checkpoint_path = resolve_checkpoint_arg(args.target)
+draft_checkpoint_path = resolve_checkpoint_arg(args.model)
 
 target_dec_len = args.gamma + 1
 

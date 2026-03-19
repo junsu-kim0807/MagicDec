@@ -174,22 +174,62 @@ def runner_for_method(method: str) -> str:
 
 
 PAIRS: list[PairConfig] = [
+    # PairConfig(
+    #     pair_id="llama32_1b_to_llama32_3b",
+    #     draft_model="meta-llama/Llama-3.2-1B-Instruct",
+    #     target_model="meta-llama/Llama-3.2-3B-Instruct",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Llama small->small",
+    # ),
+    # PairConfig(
+    #     pair_id="llama32_1b_to_llama31_8b",
+    #     draft_model="meta-llama/Llama-3.2-1B-Instruct",
+    #     target_model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Llama 1B draft -> 8B target",
+    # ),
     PairConfig(
-        pair_id="llama32_1b_to_llama31_70b",
+        pair_id="llama32_1b_to_llama33_70b",
         draft_model="meta-llama/Llama-3.2-1B-Instruct",
-        target_model="meta-llama/Meta-Llama-3.1-70B-Instruct",
+        target_model="meta-llama/Meta-Llama-3.3-70B-Instruct",
         tp_size=2,
         gpu_count=2,
         note="Llama 1B draft -> 70B target",
     ),
+    # PairConfig(
+    #     pair_id="llama32_3b_to_llama31_8b",
+    #     draft_model="meta-llama/Llama-3.2-3B-Instruct",
+    #     target_model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Llama 3B draft -> 8B target",
+    # ),
     PairConfig(
-        pair_id="llama32_3b_to_llama31_70b",
+        pair_id="llama32_3b_to_llama33_70b",
         draft_model="meta-llama/Llama-3.2-3B-Instruct",
-        target_model="meta-llama/Meta-Llama-3.1-70B-Instruct",
+        target_model="meta-llama/Meta-Llama-3.3-70B-Instruct",
         tp_size=2,
         gpu_count=2,
         note="Llama 3B draft -> 70B target",
     ),
+    # PairConfig(
+    #     pair_id="llama31_8b_to_llama33_70b",
+    #     draft_model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    #     target_model="meta-llama/Meta-Llama-3.3-70B-Instruct",
+    #     tp_size=4,
+    #     gpu_count=4,
+    #     note="Llama 8B draft -> 70B target",
+    # ),
+    # PairConfig(
+    #     pair_id="deepseekcoder_1p3b_to_6p7b",
+    #     draft_model="deepseek-ai/deepseek-coder-1.3b-instruct",
+    #     target_model="deepseek-ai/deepseek-coder-6.7b-instruct",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="DeepSeek Coder 1.3B draft -> 6.7B target",
+    # ),
     PairConfig(
         pair_id="deepseekcoder_1p3b_to_33b",
         draft_model="deepseek-ai/deepseek-coder-1.3b-instruct",
@@ -206,6 +246,23 @@ PAIRS: list[PairConfig] = [
         gpu_count=2,
         note="DeepSeek Coder 6.7B draft -> 33B target",
     ),
+    # Qwen3 speculative decoding pairs
+    # PairConfig(
+    #     pair_id="qwen3_0p6b_to_qwen3_4b",
+    #     draft_model="Qwen/Qwen3-0.6B",
+    #     target_model="Qwen/Qwen3-4B",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen3 0.6B draft -> 4B target",
+    # ),
+    # PairConfig(
+    #     pair_id="qwen3_0p6b_to_qwen3_8b",
+    #     draft_model="Qwen/Qwen3-0.6B",
+    #     target_model="Qwen/Qwen3-8B",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen3 0.6B draft -> 8B target",
+    # ),
     PairConfig(
         pair_id="qwen3_0p6b_to_qwen3_30b_a3b",
         draft_model="Qwen/Qwen3-0.6B",
@@ -214,6 +271,14 @@ PAIRS: list[PairConfig] = [
         gpu_count=2,
         note="Qwen3 0.6B draft -> 30B-A3B target",
     ),
+    # PairConfig(
+    #     pair_id="qwen3_4b_to_qwen3_8b",
+    #     draft_model="Qwen/Qwen3-4B",
+    #     target_model="Qwen/Qwen3-8B",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen3 4B draft -> 8B target",
+    # ),
     PairConfig(
         pair_id="qwen3_4b_to_qwen3_30b_a3b",
         draft_model="Qwen/Qwen3-4B",
@@ -222,7 +287,49 @@ PAIRS: list[PairConfig] = [
         gpu_count=2,
         note="Qwen3 4B draft -> 30B-A3B target",
     ),
+    # PairConfig(
+    #     pair_id="qwen3_8b_to_qwen3_30b_a3b",
+    #     draft_model="Qwen/Qwen3-8B",
+    #     target_model="Qwen/Qwen3-30B-A3B",
+    #     tp_size=2,
+    #     gpu_count=2,
+    #     note="Qwen3 8B draft -> 30B-A3B target",
+    # ),
+
+    # PairConfig(
+    #     pair_id="qwen25_0p5b_to_qwen3_4b_instruct_2507",
+    #     draft_model="Qwen/Qwen2.5-0.5B-Instruct",
+    #     target_model="Qwen/Qwen3-4B-Instruct-2507",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen2.5 0.5B draft -> Qwen3 4B Instruct 2507",
+    # ),
+    PairConfig(
+        pair_id="qwen25_0p5b_to_qwen3_30b_a3b_instruct_2507",
+        draft_model="Qwen/Qwen2.5-0.5B-Instruct",
+        target_model="Qwen/Qwen3-30B-A3B-Instruct-2507",
+        tp_size=2,
+        gpu_count=2,
+        note="Qwen2.5 0.5B draft -> Qwen3 30B-A3B Instruct 2507",
+    ),
+    # PairConfig(
+    #     pair_id="qwen3_0p6b_to_qwen3_4b_instruct_2507",
+    #     draft_model="Qwen/Qwen3-0.6B",
+    #     target_model="Qwen/Qwen3-4B-Instruct-2507",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen3 0.6B draft -> Qwen3 4B Instruct 2507",
+    # ),
+    PairConfig(
+        pair_id="qwen3_0p6b_to_qwen3_30b_a3b_instruct_2507",
+        draft_model="Qwen/Qwen3-0.6B",
+        target_model="Qwen/Qwen3-30B-A3B-Instruct-2507",
+        tp_size=2,
+        gpu_count=2,
+        note="Qwen3 0.6B draft -> Qwen3 30B-A3B Instruct 2507",
+    ),
 ]
+
 
 
 def parse_args() -> argparse.Namespace:
