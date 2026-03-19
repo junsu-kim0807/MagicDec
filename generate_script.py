@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 """
-Generate Slurm jobs for MagicDec speculative decoding experiments.
+Generate Slurm jobs for MagicDec longspec experiments.
 
 It writes jobs under:
-  ./scripts/jobs/spec_decode/<method>/<bs>/<pair_id>/<dataset>.slurm
+  ./scripts/jobs/spec_decode/<method>/<batch_size>/<pair_id>/<dataset>.slurm
 
 It sets run output root (response + profile) under:
-  ./results/spec_decode/<method>/<bs>/<dataset>/<draft__TO__target>/
+  ./results/spec_decode/<method>/<batch_size>/<dataset>/<draft__TO__target>/
 
 Example:
-  python generate_script.py --batch --datasets gov_report qmsum \
-    --methods speculative ar \
-    --pair llama32_1b_to_llama31_70b meta-llama/Llama-3.2-1B-Instruct meta-llama/Meta-Llama-3.1-70B-Instruct 2 2
+  python generate_script.py --batch --datasets gov_report qmsum --profile-time
 """
 
 from __future__ import annotations
@@ -39,6 +37,9 @@ RESULTS_ROOT = REPO_ROOT / "results" / "spec_decode"
 # If your repo uses a different script path/flags, edit RUN_SCRIPT and build_python_command().
 RUN_SCRIPT = "scripts/run_spec_decode_metrics.py"
 
+# Only run longspec jobs (per request)
+METHOD = "longspec"
+
 
 @dataclass(frozen=True)
 class PairConfig:
@@ -54,6 +55,59 @@ class PairConfig:
 class DatasetConfig:
     name: str
     max_new_tokens: int
+
+
+PAIRS: list[PairConfig] = [
+    # Provided by user
+    PairConfig(
+        pair_id="llama32_1b_to_llama31_70b",
+        draft_model="meta-llama/Llama-3.2-1B-Instruct",
+        target_model="meta-llama/Meta-Llama-3.1-70B-Instruct",
+        tp_size=2,
+        gpu_count=2,
+        note="Llama 1B draft -> 70B target",
+    ),
+    PairConfig(
+        pair_id="llama32_3b_to_llama31_70b",
+        draft_model="meta-llama/Llama-3.2-3B-Instruct",
+        target_model="meta-llama/Meta-Llama-3.1-70B-Instruct",
+        tp_size=2,
+        gpu_count=2,
+        note="Llama 3B draft -> 70B target",
+    ),
+    PairConfig(
+        pair_id="deepseekcoder_1p3b_to_33b",
+        draft_model="deepseek-ai/deepseek-coder-1.3b-instruct",
+        target_model="deepseek-ai/deepseek-coder-33b-instruct",
+        tp_size=2,
+        gpu_count=2,
+        note="DeepSeek Coder 1.3B draft -> 33B target",
+    ),
+    PairConfig(
+        pair_id="deepseekcoder_6p7b_to_33b",
+        draft_model="deepseek-ai/deepseek-coder-6.7b-instruct",
+        target_model="deepseek-ai/deepseek-coder-33b-instruct",
+        tp_size=2,
+        gpu_count=2,
+        note="DeepSeek Coder 6.7B draft -> 33B target",
+    ),
+    PairConfig(
+        pair_id="qwen3_0p6b_to_qwen3_30b_a3b",
+        draft_model="Qwen/Qwen3-0.6B",
+        target_model="Qwen/Qwen3-30B-A3B",
+        tp_size=2,
+        gpu_count=2,
+        note="Qwen3 0.6B draft -> 30B-A3B target",
+    ),
+    PairConfig(
+        pair_id="qwen3_4b_to_qwen3_30b_a3b",
+        draft_model="Qwen/Qwen3-4B",
+        target_model="Qwen/Qwen3-30B-A3B",
+        tp_size=2,
+        gpu_count=2,
+        note="Qwen3 4B draft -> 30B-A3B target",
+    ),
+]
 
 
 def sanitize_for_path(s: str) -> str:
@@ -158,6 +212,9 @@ def build_python_command(
     ]
     if profile_time:
         args.append("--profile-time")
+        # Per request: when profiling, also enable benchmark-mode timing.
+        # Assumes the runner supports `--benchmark` boolean flag.
+        args.append("--benchmark")
     if verbose:
         args.append("--verbose")
 
@@ -197,10 +254,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--batch-sizes",
         default="1,4,16,64,256",
-        help="Comma-separated batch sizes (used when not --batch, or as override).",
+        help="Comma-separated batch sizes.",
     )
     parser.add_argument("--datasets", nargs="+", default=["gov_report", "qmsum"], help="Dataset names.")
-    parser.add_argument("--methods", nargs="+", default=["speculative"], help="e.g. speculative ar")
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.90)
     parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--dtype", default="auto")
@@ -211,12 +267,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--profile-time", action="store_true", help="Enable profiler output.")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument(
-        "--pair",
-        action="append",
-        nargs=5,
-        metavar=("PAIR_ID", "DRAFT_MODEL", "TARGET_MODEL", "TP_SIZE", "GPU_COUNT"),
-        required=True,
-        help="Repeatable. Example: --pair mypair draft target 2 2",
+        "--pairs",
+        nargs="*",
+        default=[],
+        help="Optional subset of pair_id values (if empty, uses all PAIRS).",
     )
     return parser.parse_args()
 
@@ -240,50 +294,55 @@ def main() -> None:
             raise SystemExit(f"Unknown dataset: {name}. Supported: {sorted(dataset_map.keys())}")
         datasets.append(dataset_map[name])
 
-    pairs = parse_pairs(args.pair)
+    selected_pairs = []
+    pair_filter = set(args.pairs)
+    for p in PAIRS:
+        if not pair_filter or p.pair_id in pair_filter:
+            selected_pairs.append(p)
+    if not selected_pairs:
+        raise SystemExit(f"--pairs did not match any PAIRS: {sorted(pair_filter)}")
+
     batch_sizes = [int(x) for x in args.batch_sizes.split(",") if x.strip()]
-    if args.batch:
-        # Keep the same default list, but allow user override through --batch-sizes.
-        pass
 
     written: list[Path] = []
+    method = METHOD
 
-    for method in args.methods:
-        for bs in batch_sizes:
-            for dataset in datasets:
-                for pair in pairs:
-                    slug = pair_slug(pair.draft_model, pair.target_model)
+    for bs in batch_sizes:
+        for dataset in datasets:
+            for pair in selected_pairs:
+                slug = pair_slug(pair.draft_model, pair.target_model)
+                results_dir = RESULTS_ROOT / method / str(bs) / dataset.name / slug
 
-                    results_dir = RESULTS_ROOT / method / str(bs) / dataset.name / slug
-                    # Important: match your requirement exactly:
-                    #   ./results/spec_decode/$method/$batch size/$dataset/ draft+target model 이름
-                    # Here: batch size is str(bs), dataset.name is dataset, and slug is draft+target name.
+                job_name = f"{method}_{pair.pair_id}_{dataset.name}_b{bs}"
+                time_limit = time_limit_for_dataset(dataset)
 
-                    job_name = f"spec_{pair.pair_id}_{dataset.name}_b{bs}_{method}"
-                    time_limit = time_limit_for_dataset(dataset)
+                jobs_path = JOBS_ROOT / method / str(bs) / pair.pair_id / f"{dataset.name}.slurm"
+                log_dir = LOGS_ROOT / method / str(bs) / pair.pair_id
 
-                    jobs_path = JOBS_ROOT / method / str(bs) / pair.pair_id / f"{dataset.name}.slurm"
-                    log_dir = LOGS_ROOT / method / str(bs) / pair.pair_id
+                header = job_header(
+                    job_name=job_name,
+                    gpu_count=pair.gpu_count,
+                    time_limit=time_limit,
+                    log_dir=log_dir,
+                )
+                command = build_python_command(
+                    method=method,
+                    pair=pair,
+                    dataset=dataset,
+                    batch_size=bs,
+                    gpu_mem_util=args.gpu_memory_utilization,
+                    max_model_len=args.max_model_len,
+                    dtype=args.dtype,
+                    seed=args.seed,
+                    warmup_iters=args.warmup_iters,
+                    warmup_max_tokens=args.warmup_max_tokens,
+                    num_spec_tokens=args.num_spec_tokens,
+                    profile_time=args.profile_time,
+                    results_root=results_dir,
+                    verbose=args.verbose,
+                )
 
-                    header = job_header(job_name=job_name, gpu_count=pair.gpu_count, time_limit=time_limit, log_dir=log_dir)
-                    command = build_python_command(
-                        method=method,
-                        pair=pair,
-                        dataset=dataset,
-                        batch_size=bs,
-                        gpu_mem_util=args.gpu_memory_utilization,
-                        max_model_len=args.max_model_len,
-                        dtype=args.dtype,
-                        seed=args.seed,
-                        warmup_iters=args.warmup_iters,
-                        warmup_max_tokens=args.warmup_max_tokens,
-                        num_spec_tokens=args.num_spec_tokens,
-                        profile_time=args.profile_time,
-                        results_root=results_dir,
-                        verbose=args.verbose,
-                    )
-
-                    body = f"""
+                body = f"""
 mkdir -p {shquote(str(results_dir))}
 echo "JOB: {job_name}"
 echo "RESULTS_DIR: {shquote(str(results_dir))}"
@@ -291,10 +350,10 @@ echo "RESULTS_DIR: {shquote(str(results_dir))}"
 {command}
 """
 
-                    content = header + "\n" + body.strip() + "\n"
-                    write_job_script(jobs_path, content)
-                    written.append(jobs_path)
-                    print(f"Wrote {jobs_path}")
+                content = header + "\n" + body.strip() + "\n"
+                write_job_script(jobs_path, content)
+                written.append(jobs_path)
+                print(f"Wrote {jobs_path}")
 
     # Convenience submit script
     submit_path = REPO_ROOT / "scripts" / "submit_spec_decode.sh"

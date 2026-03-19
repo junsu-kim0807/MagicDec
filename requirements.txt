@@ -2,7 +2,7 @@ transformers>=4.56.0,<5
 numpy==1.26.3
 protobuf>=5.29.6
 sentencepiece
-datasets==2.16.1
+datasets==4.4.2
 tiktoken
 packaging
 ninja
