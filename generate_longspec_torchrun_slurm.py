@@ -123,6 +123,11 @@ def ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
 
 
+def shquote(value: str) -> str:
+    """Bash-safe single-quote wrapper."""
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
 def job_header(job_name: str, gpu_count: int, time_limit: str, out_dir: Path, script_path: Path) -> str:
     # NOTE: --output/--error directory must exist at submission time, so generator creates out_dir.
     out_dir = out_dir.resolve()
