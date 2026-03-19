@@ -4,26 +4,54 @@ from MagicDec.Engine.utils import load_model_streamingLLM
 import flashinfer
 
 def _flashinfer_plan(wrapper, **kwargs):
-    """Call flashinfer wrapper.plan with backward-compatible kwargs."""
+    """Call flashinfer wrapper.plan with backward-compatible kwargs.
+
+    FlashInfer 0.6+ uses ``head_dim_qk`` (and sometimes ``head_dim_v``) instead
+    of the older ``head_dim`` keyword; map when the installed package rejects
+    ``head_dim`` or complains about ``head_dim_qk``.
+    """
+    def _without_q_data_type(kw):
+        out = dict(kw)
+        out.pop("q_data_type", None)
+        return out
+
+    def _map_head_dim_to_qk(kw):
+        if "head_dim" not in kw:
+            return dict(kw)
+        out = {k: v for k, v in kw.items() if k != "head_dim"}
+        hd = kw["head_dim"]
+        out["head_dim_qk"] = hd
+        out.setdefault("head_dim_v", hd)
+        return out
+
     try:
         return wrapper.plan(**kwargs)
     except TypeError as e:
         msg = str(e)
-        if "head_dim" in msg and "head_dim" in kwargs:
-            kwargs = dict(kwargs)
-            kwargs.pop("head_dim", None)
+        if "head_dim" in kwargs and (
+            "unexpected keyword argument 'head_dim'" in msg
+            or "head_dim_qk" in msg
+        ):
+            mapped = _map_head_dim_to_qk(kwargs)
             try:
-                return wrapper.plan(**kwargs)
+                return wrapper.plan(**mapped)
             except TypeError as e2:
                 msg2 = str(e2)
-                if "q_data_type" in msg2 and "q_data_type" in kwargs:
-                    kwargs.pop("q_data_type", None)
-                    return wrapper.plan(**kwargs)
+                if "unexpected keyword argument 'head_dim_v'" in msg2:
+                    mapped = dict(mapped)
+                    mapped.pop("head_dim_v", None)
+                    try:
+                        return wrapper.plan(**mapped)
+                    except TypeError as e3:
+                        msg3 = str(e3)
+                        if "q_data_type" in msg3 and "q_data_type" in mapped:
+                            return wrapper.plan(**_without_q_data_type(mapped))
+                        raise
+                if "q_data_type" in msg2 and "q_data_type" in mapped:
+                    return wrapper.plan(**_without_q_data_type(mapped))
                 raise
         if "q_data_type" in msg and "q_data_type" in kwargs:
-            kwargs = dict(kwargs)
-            kwargs.pop("q_data_type", None)
-            return wrapper.plan(**kwargs)
+            return wrapper.plan(**_without_q_data_type(kwargs))
         raise
 
 class LMBackend:
