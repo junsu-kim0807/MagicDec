@@ -383,12 +383,10 @@ def build_python_command(
         "--trust-remote-code",
         "--enable-chunked-prefill",
         f"--method {shquote(method)}",
+        "--benchmark",
     ]
     if profile_time:
         args.append("--profile-time")
-        # Per request: when profiling, also enable benchmark-mode timing.
-        # Assumes the runner supports `--benchmark` boolean flag.
-        args.append("--benchmark")
     if verbose:
         args.append("--verbose")
 
@@ -467,6 +465,10 @@ def main() -> None:
         if name not in dataset_map:
             raise SystemExit(f"Unknown dataset: {name}. Supported: {sorted(dataset_map.keys())}")
         datasets.append(dataset_map[name])
+
+    # Per request: when generating batch jobs, generate codeelo only.
+    if args.batch:
+        datasets = [dataset_map["codeelo"]]
 
     selected_pairs = []
     pair_filter = set(args.pairs)

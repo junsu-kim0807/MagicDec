@@ -84,9 +84,34 @@ def resolve_checkpoint_arg(arg_value) -> Path:
                 print(f"Resolved repo id {raw} -> {link_path} (raw: {raw_ckpt})")
                 return link_path
 
+        # Fallback: download and convert to model.pth automatically.
+        models_root = Path(os.environ.get("MODELS_ROOT", "/scratch/models"))
+        local_ckpt_dir = models_root / org / name
+        local_ckpt_file = local_ckpt_dir / "model.pth"
+
+        should_sync = dist.is_available() and dist.is_initialized()
+        is_rank0 = (not should_sync) or dist.get_rank() == 0
+
+        if is_rank0 and not local_ckpt_file.is_file():
+            local_ckpt_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Downloading {raw} to {local_ckpt_dir} ...")
+            from download import hf_download
+            hf_download(out_dir=str(local_ckpt_dir), repo_id=raw, hf_token=os.environ.get("HF_TOKEN"))
+
+            print(f"Converting checkpoint to {local_ckpt_file} ...")
+            from convert_hf_checkpoint import convert_hf_checkpoint
+            convert_hf_checkpoint(checkpoint_dir=local_ckpt_dir, model_name=name)
+
+        if should_sync:
+            dist.barrier()
+
+        if local_ckpt_file.is_file():
+            print(f"Resolved repo id {raw} -> {local_ckpt_file} (download+convert)")
+            return local_ckpt_file
+
         raise FileNotFoundError(
-            f"Could not resolve repo id '{raw}' from HF cache ({hub_cache}). "
-            "Expected model.pth/model.pt/pytorch_model.* in snapshots."
+            f"Could not resolve repo id '{raw}' from HF cache ({hub_cache}), "
+            "and automatic download+convert did not produce model.pth."
         )
 
     raise FileNotFoundError(f"Checkpoint file not found: {p}")

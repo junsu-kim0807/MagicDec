@@ -335,13 +335,20 @@ PAIRS: list[PairConfig] = [
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate Slurm jobs for longspec torchrun.")
     parser.add_argument("--batch-sizes", default="64", help="Comma-separated batch sizes, e.g. '1,4,16'.")
-    parser.add_argument("--datasets", nargs="*", default=["gov_report", "qmsum"], help="gov_report qmsum only.")
+    parser.add_argument(
+        "--datasets",
+        nargs="*",
+        default=["gov_report", "qmsum", "aime2025", "codeelo"],
+        help="Datasets to run (gov_report/govreport, qmsum, aime2025, codeelo).",
+    )
 
     parser.add_argument("--prefix-len", type=int, default=16032, help="Prefill length.")
     parser.add_argument("--draft-budget", type=int, default=257, help="Draft KV budget (SnapKV/StreamingLLM asserts alignment).")
 
     parser.add_argument("--gov-report-max-len", type=int, default=16128, help="max_len for gov_report.")
     parser.add_argument("--qmsum-max-len", type=int, default=16128, help="max_len for qmsum.")
+    parser.add_argument("--aime2025-max-len", type=int, default=16128, help="max_len for aime2025.")
+    parser.add_argument("--codeelo-max-len", type=int, default=16128, help="max_len for codeelo.")
 
     parser.add_argument("--gamma", type=int, default=3, help="Gamma (keep 3 by request).")
     parser.add_argument("--seed", type=int, default=123, help="Random seed.")
@@ -357,7 +364,7 @@ def parse_args() -> argparse.Namespace:
 
 def time_limit_for_dataset(dataset_short: str) -> str:
     # Basic heuristic; adjust to your environment.
-    if dataset_short in ("gov_report", "qmsum"):
+    if dataset_short in ("gov_report", "govreport", "qmsum", "aime2025", "codeelo"):
         return "04:00:00"
     return "03:00:00"
 
@@ -373,12 +380,21 @@ def main() -> None:
     datasets = args.datasets
 
     # Dataset args expected by longspec_benchmark.py:
-    #   --dataset longbench-v1:<task_name>
-    dataset_to_task = {"gov_report": "gov_report", "govreport": "gov_report", "qmsum": "qmsum"}
+    # - longbench-v1 tasks: longbench-v1:<task_name>
+    # - direct datasets: aime2025, codeelo
+    dataset_to_arg = {
+        "gov_report": "longbench-v1:gov_report",
+        "govreport": "longbench-v1:gov_report",
+        "qmsum": "longbench-v1:qmsum",
+        "aime2025": "aime2025",
+        "codeelo": "codeelo",
+    }
     dataset_to_max_len = {
         "gov_report": args.gov_report_max_len,
         "govreport": args.gov_report_max_len,
         "qmsum": args.qmsum_max_len,
+        "aime2025": args.aime2025_max_len,
+        "codeelo": args.codeelo_max_len,
     }
 
     methods = ["longspec_snap", "longspec_stream"]
@@ -389,11 +405,13 @@ def main() -> None:
 
         for bs in batch_sizes:
             for ds_short in datasets:
-                if ds_short not in dataset_to_task:
-                    raise SystemExit(f"Unsupported dataset: {ds_short}. Expected gov_report/qmsum.")
+                if ds_short not in dataset_to_arg:
+                    raise SystemExit(
+                        f"Unsupported dataset: {ds_short}. "
+                        "Expected gov_report/govreport/qmsum/aime2025/codeelo."
+                    )
 
-                task_name = dataset_to_task[ds_short]
-                dataset_arg = f"longbench-v1:{task_name}"
+                dataset_arg = dataset_to_arg[ds_short]
                 max_len = dataset_to_max_len[ds_short]
                 time_limit = time_limit_for_dataset(ds_short)
 
@@ -439,10 +457,11 @@ def main() -> None:
                         f"--max_len {max_len}",
                         f"--draft_budget {args.draft_budget}",
                         f"--dataset {shquote(dataset_arg)}",
+                        "--benchmark",
                     ]
 
                     if args.profile_time:
-                        cmd_parts.append("--benchmark")
+                        pass
                     if args.compile:
                         cmd_parts.append("--compile")
 
