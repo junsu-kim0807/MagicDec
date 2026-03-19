@@ -103,7 +103,12 @@ def convert_codeelo_dataset(tokenizer, seq_len: int = 4096, end: int = 20):
     CodeElo prompts from HF: Qwen/CodeElo
     Uses description + input (+interaction/note if present) as the prompt.
     """
-    dataset = load_dataset("Qwen/CodeElo", split="train")
+    # CodeElo currently exposes `test` split on HF. Keep a fallback for
+    # compatibility in case `train` is added later.
+    try:
+        dataset = load_dataset("Qwen/CodeElo", split="train")
+    except ValueError:
+        dataset = load_dataset("Qwen/CodeElo", split="test")
 
     texts = []
     for row in dataset:
