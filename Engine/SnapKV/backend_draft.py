@@ -3,6 +3,29 @@ from MagicDec.Engine.SnapKV.model_draft import Transformer
 from MagicDec.Engine.utils import load_model_draft_snapKV
 import flashinfer
 
+def _flashinfer_plan(wrapper, **kwargs):
+    """Call flashinfer wrapper.plan with backward-compatible kwargs."""
+    try:
+        return wrapper.plan(**kwargs)
+    except TypeError as e:
+        msg = str(e)
+        if "head_dim" in msg and "head_dim" in kwargs:
+            kwargs = dict(kwargs)
+            kwargs.pop("head_dim", None)
+            try:
+                return wrapper.plan(**kwargs)
+            except TypeError as e2:
+                msg2 = str(e2)
+                if "q_data_type" in msg2 and "q_data_type" in kwargs:
+                    kwargs.pop("q_data_type", None)
+                    return wrapper.plan(**kwargs)
+                raise
+        if "q_data_type" in msg and "q_data_type" in kwargs:
+            kwargs = dict(kwargs)
+            kwargs.pop("q_data_type", None)
+            return wrapper.plan(**kwargs)
+        raise
+
 class LMBackend_Draft:
     def __init__(self, dtype = torch.bfloat16, device: str = "cuda:0", dec_len: list = [1], draft_budget: int = None) -> None:
         self.dtype = dtype
@@ -145,7 +168,7 @@ class LMBackend_Draft:
     def pre_decode(self, dec_len):
             if self.is_compress:
                 self.draft_paged_kv_last_page_len += dec_len
-                self.decode_wrapper.plan(
+                _flashinfer_plan(self.decode_wrapper,
                     qo_indptr=self.qo_indptr*dec_len,
                     paged_kv_indptr=self.draft_paged_kv_indptr,
                     paged_kv_indices=self.draft_paged_kv_indices,
@@ -159,7 +182,7 @@ class LMBackend_Draft:
                 )
             else:
                 self.paged_kv_last_page_len += dec_len
-                self.decode_wrapper.plan(
+                _flashinfer_plan(self.decode_wrapper,
                     qo_indptr=self.qo_indptr*dec_len,
                     paged_kv_indptr=self.paged_kv_indptr,
                     paged_kv_indices=self.paged_kv_indices,
@@ -213,7 +236,7 @@ class LMBackend_Draft:
         self.paged_kv_indices = torch.cat([torch.arange(i * self.max_num_pages_per_request, i * self.max_num_pages_per_request + self.num_pages_per_request[i], dtype=torch.int32, device=self.device) for i in range(self.batch_size)])
         self.paged_kv_indptr[1:] = torch.cumsum(self.num_pages_per_request, dim=0, dtype=torch.int32)
         self.paged_kv_last_page_len = torch.full((self.batch_size,), dec_len, dtype=torch.int32, device=self.device)
-        self.prefill_wrapper.plan(
+        _flashinfer_plan(self.prefill_wrapper,
             qo_indptr=qo_indptr,
             paged_kv_indptr=self.paged_kv_indptr,
             paged_kv_indices=self.paged_kv_indices,
