@@ -58,23 +58,62 @@ class DatasetConfig:
 
 
 PAIRS: list[PairConfig] = [
-    # Provided by user
+    # PairConfig(
+    #     pair_id="llama32_1b_to_llama32_3b",
+    #     draft_model="meta-llama/Llama-3.2-1B-Instruct",
+    #     target_model="meta-llama/Llama-3.2-3B-Instruct",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Llama small->small",
+    # ),
+    # PairConfig(
+    #     pair_id="llama32_1b_to_llama31_8b",
+    #     draft_model="meta-llama/Llama-3.2-1B-Instruct",
+    #     target_model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Llama 1B draft -> 8B target",
+    # ),
     PairConfig(
-        pair_id="llama32_1b_to_llama31_70b",
+        pair_id="llama32_1b_to_llama33_70b",
         draft_model="meta-llama/Llama-3.2-1B-Instruct",
-        target_model="meta-llama/Meta-Llama-3.1-70B-Instruct",
-        tp_size=4,
-        gpu_count=4,
+        target_model="meta-llama/Meta-Llama-3.3-70B-Instruct",
+        tp_size=2,
+        gpu_count=2,
         note="Llama 1B draft -> 70B target",
     ),
+    # PairConfig(
+    #     pair_id="llama32_3b_to_llama31_8b",
+    #     draft_model="meta-llama/Llama-3.2-3B-Instruct",
+    #     target_model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Llama 3B draft -> 8B target",
+    # ),
     PairConfig(
-        pair_id="llama32_3b_to_llama31_70b",
+        pair_id="llama32_3b_to_llama33_70b",
         draft_model="meta-llama/Llama-3.2-3B-Instruct",
-        target_model="meta-llama/Meta-Llama-3.1-70B-Instruct",
-        tp_size=4,
-        gpu_count=4,
+        target_model="meta-llama/Meta-Llama-3.3-70B-Instruct",
+        tp_size=2,
+        gpu_count=2,
         note="Llama 3B draft -> 70B target",
     ),
+    # PairConfig(
+    #     pair_id="llama31_8b_to_llama33_70b",
+    #     draft_model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    #     target_model="meta-llama/Meta-Llama-3.3-70B-Instruct",
+    #     tp_size=4,
+    #     gpu_count=4,
+    #     note="Llama 8B draft -> 70B target",
+    # ),
+    # PairConfig(
+    #     pair_id="deepseekcoder_1p3b_to_6p7b",
+    #     draft_model="deepseek-ai/deepseek-coder-1.3b-instruct",
+    #     target_model="deepseek-ai/deepseek-coder-6.7b-instruct",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="DeepSeek Coder 1.3B draft -> 6.7B target",
+    # ),
     PairConfig(
         pair_id="deepseekcoder_1p3b_to_33b",
         draft_model="deepseek-ai/deepseek-coder-1.3b-instruct",
@@ -91,6 +130,23 @@ PAIRS: list[PairConfig] = [
         gpu_count=2,
         note="DeepSeek Coder 6.7B draft -> 33B target",
     ),
+    # Qwen3 speculative decoding pairs
+    # PairConfig(
+    #     pair_id="qwen3_0p6b_to_qwen3_4b",
+    #     draft_model="Qwen/Qwen3-0.6B",
+    #     target_model="Qwen/Qwen3-4B",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen3 0.6B draft -> 4B target",
+    # ),
+    # PairConfig(
+    #     pair_id="qwen3_0p6b_to_qwen3_8b",
+    #     draft_model="Qwen/Qwen3-0.6B",
+    #     target_model="Qwen/Qwen3-8B",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen3 0.6B draft -> 8B target",
+    # ),
     PairConfig(
         pair_id="qwen3_0p6b_to_qwen3_30b_a3b",
         draft_model="Qwen/Qwen3-0.6B",
@@ -99,6 +155,14 @@ PAIRS: list[PairConfig] = [
         gpu_count=2,
         note="Qwen3 0.6B draft -> 30B-A3B target",
     ),
+    # PairConfig(
+    #     pair_id="qwen3_4b_to_qwen3_8b",
+    #     draft_model="Qwen/Qwen3-4B",
+    #     target_model="Qwen/Qwen3-8B",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen3 4B draft -> 8B target",
+    # ),
     PairConfig(
         pair_id="qwen3_4b_to_qwen3_30b_a3b",
         draft_model="Qwen/Qwen3-4B",
@@ -106,6 +170,47 @@ PAIRS: list[PairConfig] = [
         tp_size=2,
         gpu_count=2,
         note="Qwen3 4B draft -> 30B-A3B target",
+    ),
+    # PairConfig(
+    #     pair_id="qwen3_8b_to_qwen3_30b_a3b",
+    #     draft_model="Qwen/Qwen3-8B",
+    #     target_model="Qwen/Qwen3-30B-A3B",
+    #     tp_size=2,
+    #     gpu_count=2,
+    #     note="Qwen3 8B draft -> 30B-A3B target",
+    # ),
+
+    # PairConfig(
+    #     pair_id="qwen25_0p5b_to_qwen3_4b_instruct_2507",
+    #     draft_model="Qwen/Qwen2.5-0.5B-Instruct",
+    #     target_model="Qwen/Qwen3-4B-Instruct-2507",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen2.5 0.5B draft -> Qwen3 4B Instruct 2507",
+    # ),
+    PairConfig(
+        pair_id="qwen25_0p5b_to_qwen3_30b_a3b_instruct_2507",
+        draft_model="Qwen/Qwen2.5-0.5B-Instruct",
+        target_model="Qwen/Qwen3-30B-A3B-Instruct-2507",
+        tp_size=2,
+        gpu_count=2,
+        note="Qwen2.5 0.5B draft -> Qwen3 30B-A3B Instruct 2507",
+    ),
+    # PairConfig(
+    #     pair_id="qwen3_0p6b_to_qwen3_4b_instruct_2507",
+    #     draft_model="Qwen/Qwen3-0.6B",
+    #     target_model="Qwen/Qwen3-4B-Instruct-2507",
+    #     tp_size=1,
+    #     gpu_count=1,
+    #     note="Qwen3 0.6B draft -> Qwen3 4B Instruct 2507",
+    # ),
+    PairConfig(
+        pair_id="qwen3_0p6b_to_qwen3_30b_a3b_instruct_2507",
+        draft_model="Qwen/Qwen3-0.6B",
+        target_model="Qwen/Qwen3-30B-A3B-Instruct-2507",
+        tp_size=2,
+        gpu_count=2,
+        note="Qwen3 0.6B draft -> Qwen3 30B-A3B Instruct 2507",
     ),
 ]
 
@@ -166,11 +271,80 @@ export PYTHONNOUSERSITE=1
 
 # If your models require HF auth, export HF_TOKEN before sbatch.
 export HF_TOKEN="${{HF_TOKEN:-}}"
-export HF_HOME="${{HF_HOME:-/home/junsuk87/scratch/.cache}}"
-export TRANSFORMERS_CACHE="${{TRANSFORMERS_CACHE:-/home/junsuk87/scratch/.cache/transformers}}"
-export HUGGINGFACE_HUB_CACHE="${{HUGGINGFACE_HUB_CACHE:-/home/junsuk87/scratch/.cache/huggingface_hub}}"
-export HF_DATASETS_CACHE="${{HF_DATASETS_CACHE:-/home/junsuk87/scratch/.cache/datasets}}"
+export HF_HOME="${{HF_HOME:-$HOME/scratch/.cache}}"
+export TRANSFORMERS_CACHE="${{TRANSFORMERS_CACHE:-$HOME/scratch/.cache/transformers}}"
+export HUGGINGFACE_HUB_CACHE="${{HUGGINGFACE_HUB_CACHE:-$HOME/scratch/.cache/huggingface_hub}}"
+export HF_DATASETS_CACHE="${{HF_DATASETS_CACHE:-$HOME/scratch/.cache/datasets}}"
 """
+
+
+def ckpt_candidates_from_hf_repo(repo_id: str) -> list[str]:
+    """
+    Return candidate weight *file* paths in HF cache snapshots.
+
+    The returned paths intentionally keep '$HUGGINGFACE_HUB_CACHE' so they
+    can be expanded inside the generated Slurm job.
+    """
+    if "/" not in repo_id:
+        raise ValueError(f"Expected HF repo_id like org/name, got: {repo_id!r}")
+    org, name = repo_id.split("/", 1)
+    org_lower = org.lower()
+
+    # HF snapshot uses model repo name as stored in the cache. Sometimes
+    # conversion outputs are produced under normalized names, so we try a
+    # couple variants.
+    name_variants: list[str] = [name]
+    if name.endswith("-Instruct"):
+        name_variants.append(name[: -len("-Instruct")])
+    if name.startswith("Meta-"):
+        name_variants.append(name[len("Meta-") :])
+    if name.startswith("Meta-") and name.endswith("-Instruct"):
+        base = name[len("Meta-") : -len("-Instruct")]
+        name_variants.append(base)
+
+    org_variants = [org, org_lower] if org_lower != org else [org]
+
+    candidates: list[str] = []
+    weight_files = [
+        "model.pth",
+        "model.pt",
+        "pytorch_model.bin",
+        "pytorch_model.pt",
+        "pytorch_model.pth",
+    ]
+
+    for org_v in org_variants:
+        for n_v in name_variants:
+            snap_base = f"$HUGGINGFACE_HUB_CACHE/models--{org_v}--{n_v}/snapshots/*"
+            for wf in weight_files:
+                p = f"{snap_base}/{wf}"
+                if p not in candidates:
+                    candidates.append(p)
+    return candidates
+
+
+def dest_name_variants(name: str) -> list[str]:
+    # Where to place symlinked `model.pth` under MODELS_ROOT/<org>/<name>/.
+    out: list[str] = [name]
+    if name.endswith("-Instruct"):
+        out.append(name[: -len("-Instruct")])
+    if name.startswith("Meta-"):
+        out.append(name[len("Meta-") :])
+    if name.startswith("Meta-") and name.endswith("-Instruct"):
+        out.append(name[len("Meta-") : -len("-Instruct")])
+    # De-dup while preserving order
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for x in out:
+        if x not in seen:
+            seen.add(x)
+            uniq.append(x)
+    return uniq
+
+
+def dest_org_variants(org: str) -> list[str]:
+    org_lower = org.lower()
+    return [org] + ([org_lower] if org_lower != org else [])
 
 
 def build_python_command(
@@ -342,10 +516,63 @@ def main() -> None:
                     verbose=args.verbose,
                 )
 
+                # Build HF-cache -> /scratch/models symlink plan for this pair.
+                draft_cands = ckpt_candidates_from_hf_repo(pair.draft_model)
+                target_cands = ckpt_candidates_from_hf_repo(pair.target_model)
+                draft_cands_bash = " ".join(draft_cands)
+                target_cands_bash = " ".join(target_cands)
+
+                draft_org, draft_name = pair.draft_model.split("/", 1)
+                target_org, target_name = pair.target_model.split("/", 1)
+
+                draft_symlink_lines_list: list[str] = []
+                for org_v in dest_org_variants(draft_org):
+                    for n_v in dest_name_variants(draft_name):
+                        draft_symlink_lines_list.append(f'mkdir -p "$MODELS_ROOT/{org_v}/{n_v}"')
+                        draft_symlink_lines_list.append(
+                            f'ln -sf "$RAW_DRAFT_CKPT_FILE" "$MODELS_ROOT/{org_v}/{n_v}/model.pth"'
+                        )
+                draft_symlink_lines = "\n".join(draft_symlink_lines_list)
+
+                target_symlink_lines_list: list[str] = []
+                for org_v in dest_org_variants(target_org):
+                    for n_v in dest_name_variants(target_name):
+                        target_symlink_lines_list.append(f'mkdir -p "$MODELS_ROOT/{org_v}/{n_v}"')
+                        target_symlink_lines_list.append(
+                            f'ln -sf "$RAW_TARGET_CKPT_FILE" "$MODELS_ROOT/{org_v}/{n_v}/model.pth"'
+                        )
+                target_symlink_lines = "\n".join(target_symlink_lines_list)
+
                 body = f"""
 mkdir -p {shquote(str(results_dir))}
 echo "JOB: {job_name}"
 echo "RESULTS_DIR: {shquote(str(results_dir))}"
+
+# Resolve HF snapshot weights and symlink into /scratch/models.
+# This supports environments where only HF cache exists (no pre-converted model.pth).
+MODELS_ROOT="${{MODELS_ROOT:-/scratch/models}}"
+
+RAW_DRAFT_CKPT_FILE=""
+for c in {draft_cands_bash}; do
+  if [ -f "$c" ]; then RAW_DRAFT_CKPT_FILE="$c"; break; fi
+done
+if [ -z "$RAW_DRAFT_CKPT_FILE" ]; then
+  echo "Missing draft weight file for {pair.draft_model}" >&2
+  exit 1
+fi
+
+{draft_symlink_lines}
+
+RAW_TARGET_CKPT_FILE=""
+for c in {target_cands_bash}; do
+  if [ -f "$c" ]; then RAW_TARGET_CKPT_FILE="$c"; break; fi
+done
+if [ -z "$RAW_TARGET_CKPT_FILE" ]; then
+  echo "Missing target weight file for {pair.target_model}" >&2
+  exit 1
+fi
+
+{target_symlink_lines}
 
 {command}
 """

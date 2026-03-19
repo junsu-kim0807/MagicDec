@@ -69,6 +69,20 @@ transformer_configs = {
     "llama-3.1-8b": dict(block_size=131072, n_layer=32, n_head=32, n_local_heads=8, dim=4096, intermediate_size=14336, vocab_size=128256, rope_base=500000.0, scaling_factor=8, high_freq_factor=4, low_freq_factor=1, original_max_position_embeddings=8192),
     "llama-3.1-70b": dict(block_size=131072, n_layer=80, n_head=64, n_local_heads=8, dim=8192, intermediate_size=28672, vocab_size=128256, rope_base=500000.0, scaling_factor=8, high_freq_factor=4, low_freq_factor=1, original_max_position_embeddings=8192),
     "llama-3.2-1b": dict(block_size=131072, n_layer=16, n_head=32, n_local_heads=8, dim=2048, intermediate_size=8192, vocab_size=128256, rope_base=500000.0, scaling_factor=32, high_freq_factor=4, low_freq_factor=1, original_max_position_embeddings=8192),
+    # Llama 3.2 3B (used by longspec pairs)
+    "llama-3.2-3b": dict(block_size=131072, n_layer=28, n_head=24, n_local_heads=8, dim=3072, intermediate_size=8192, vocab_size=128256, rope_base=500000.0, scaling_factor=32, high_freq_factor=4, low_freq_factor=1, original_max_position_embeddings=8192),
+    # Llama 3.3 70B (architecturally treated as Llama 3.1-70B in this repo)
+    "llama-3.3-70b": dict(block_size=131072, n_layer=80, n_head=64, n_local_heads=8, dim=8192, intermediate_size=28672, vocab_size=128256, rope_base=500000.0, scaling_factor=8, high_freq_factor=4, low_freq_factor=1, original_max_position_embeddings=8192),
+    # Qwen3 (used by longspec pairs)
+    "qwen3-0.6b": dict(block_size=40960, n_layer=28, n_head=16, n_local_heads=8, dim=1024, intermediate_size=3072, vocab_size=151936, rope_base=1000000.0, qkv_bias=False, norm_eps=1e-6),
+    "qwen3-4b": dict(block_size=40960, n_layer=36, n_head=32, n_local_heads=8, dim=2560, intermediate_size=9728, vocab_size=151936, rope_base=1000000.0, qkv_bias=False, norm_eps=1e-6),
+    "qwen3-30b-a3b": dict(block_size=40960, n_layer=48, n_head=32, n_local_heads=4, dim=2048, intermediate_size=6144, vocab_size=151936, rope_base=1000000.0, qkv_bias=False, norm_eps=1e-6),
+    # DeepSeek-Coder (used by longspec pairs)
+    "deepseek-coder-1.3b": dict(block_size=16384, n_layer=24, n_head=16, n_local_heads=16, dim=2048, intermediate_size=5504, vocab_size=32256, rope_base=100000.0, scaling_factor=4.0, qkv_bias=False, norm_eps=1e-6),
+    "deepseek-coder-6.7b": dict(block_size=16384, n_layer=32, n_head=32, n_local_heads=32, dim=4096, intermediate_size=11008, vocab_size=32256, rope_base=100000.0, scaling_factor=4.0, qkv_bias=False, norm_eps=1e-6),
+    "deepseek-coder-33b": dict(block_size=16384, n_layer=62, n_head=56, n_local_heads=8, dim=7168, intermediate_size=19200, vocab_size=32256, rope_base=100000.0, scaling_factor=4.0, qkv_bias=False, norm_eps=1e-6),
+    # Qwen2.5 0.5B (used by generate_script.py)
+    "qwen2.5-0.5b": dict(block_size=131072, n_layer=24, n_head=14, n_local_heads=2, dim=896, intermediate_size=4864, vocab_size=151936, rope_base=1000000.0, qkv_bias=True, norm_eps=1e-6),
     "Qwen2.5-7b": dict(block_size=131072, n_layer=28, n_head=28, n_local_heads=4, dim=3584, intermediate_size=18944, vocab_size=152064, rope_base=1000000.0, qkv_bias=True, norm_eps=1e-6),
     "Qwen2.5-14b": dict(block_size=131072, n_layer=48, n_head=40, n_local_heads=8, dim=5120, intermediate_size=13824, vocab_size=152064, rope_base=1000000.0, qkv_bias=True, norm_eps=1e-6),
     "Qwen2.5-32b": dict(block_size=131072, n_layer=64, n_head=40, n_local_heads=8, dim=5120, intermediate_size=27648, vocab_size=152064, rope_base=1000000.0, qkv_bias=True, norm_eps=1e-6),
