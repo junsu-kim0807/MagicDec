@@ -1,6 +1,7 @@
 import time
 import os
 import glob
+import subprocess
 import torch
 import sys
 sys.path.append("..")
@@ -72,6 +73,7 @@ def resolve_checkpoint_arg(arg_value, force_download: bool = False) -> Path:
     raw = str(arg_value)
     looks_like_repo_id = ("/" in raw) and (not raw.endswith((".pth", ".pt", ".bin", ".safetensors")))
     if looks_like_repo_id:
+        repo_root = Path(__file__).resolve().parents[2]
         org, name = raw.split("/", 1)
         hub_cache = (
             os.environ.get("HF_HUB_CACHE")
@@ -138,12 +140,29 @@ def resolve_checkpoint_arg(arg_value, force_download: bool = False) -> Path:
         if is_rank0 and (force_download or not local_ckpt_file.is_file()):
             local_ckpt_dir.mkdir(parents=True, exist_ok=True)
             print(f"Downloading {raw} to {local_ckpt_dir} ...")
-            from download import hf_download
-            hf_download(out_dir=str(local_ckpt_dir), repo_id=raw, hf_token=os.environ.get("HF_TOKEN"))
+            download_cmd = [
+                sys.executable,
+                str(repo_root / "download.py"),
+                "--repo_id",
+                raw,
+                "--out_dir",
+                str(local_ckpt_dir),
+            ]
+            hf_token = os.environ.get("HF_TOKEN")
+            if hf_token:
+                download_cmd.extend(["--hf_token", hf_token])
+            subprocess.run(download_cmd, check=True)
 
             print(f"Converting checkpoint to {local_ckpt_file} ...")
-            from convert_hf_checkpoint import convert_hf_checkpoint
-            convert_hf_checkpoint(checkpoint_dir=local_ckpt_dir, model_name=name)
+            convert_cmd = [
+                sys.executable,
+                str(repo_root / "convert_hf_checkpoint.py"),
+                "--checkpoint_dir",
+                str(local_ckpt_dir),
+                "--model_name",
+                name,
+            ]
+            subprocess.run(convert_cmd, check=True)
 
         if should_sync:
             dist.barrier()
