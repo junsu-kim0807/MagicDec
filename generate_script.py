@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # Per user request (from their cluster layout)
-REPO_DIR = "/home/jhwoo36/scratch/specdec/MagicDec"
-VENV_DIR = "/home/jhwoo36/scratch/venvs/vllm"
+REPO_DIR = "/home/junsuk87/scratch/specdec/MagicDec"
+VENV_DIR = "/home/junsuk87/scratch/venvs/vllm"
 
 # Always generate for the cluster paths.
 REPO_ROOT = Path(REPO_DIR)
@@ -63,16 +63,16 @@ PAIRS: list[PairConfig] = [
         pair_id="llama32_1b_to_llama31_70b",
         draft_model="meta-llama/Llama-3.2-1B-Instruct",
         target_model="meta-llama/Meta-Llama-3.1-70B-Instruct",
-        tp_size=2,
-        gpu_count=2,
+        tp_size=4,
+        gpu_count=4,
         note="Llama 1B draft -> 70B target",
     ),
     PairConfig(
         pair_id="llama32_3b_to_llama31_70b",
         draft_model="meta-llama/Llama-3.2-3B-Instruct",
         target_model="meta-llama/Meta-Llama-3.1-70B-Instruct",
-        tp_size=2,
-        gpu_count=2,
+        tp_size=4,
+        gpu_count=4,
         note="Llama 3B draft -> 70B target",
     ),
     PairConfig(
@@ -166,10 +166,10 @@ export PYTHONNOUSERSITE=1
 
 # If your models require HF auth, export HF_TOKEN before sbatch.
 export HF_TOKEN="${{HF_TOKEN:-}}"
-export HF_HOME="${{HF_HOME:-/home/jhwoo36/scratch/.cache}}"
-export TRANSFORMERS_CACHE="${{TRANSFORMERS_CACHE:-/home/jhwoo36/scratch/.cache/transformers}}"
-export HUGGINGFACE_HUB_CACHE="${{HUGGINGFACE_HUB_CACHE:-/home/jhwoo36/scratch/.cache/huggingface_hub}}"
-export HF_DATASETS_CACHE="${{HF_DATASETS_CACHE:-/home/jhwoo36/scratch/.cache/datasets}}"
+export HF_HOME="${{HF_HOME:-/home/junsuk87/scratch/.cache}}"
+export TRANSFORMERS_CACHE="${{TRANSFORMERS_CACHE:-/home/junsuk87/scratch/.cache/transformers}}"
+export HUGGINGFACE_HUB_CACHE="${{HUGGINGFACE_HUB_CACHE:-/home/junsuk87/scratch/.cache/huggingface_hub}}"
+export HF_DATASETS_CACHE="${{HF_DATASETS_CACHE:-/home/junsuk87/scratch/.cache/datasets}}"
 """
 
 
