@@ -4,6 +4,88 @@ import random
 from torch.nn.functional import softmax
 import flashinfer
 
+
+def _flashinfer_page_fn(name: str):
+    """Resolve helpers re-exported on ``flashinfer`` or under ``flashinfer.page``."""
+    fn = getattr(flashinfer, name, None)
+    if fn is not None:
+        return fn
+    page = getattr(flashinfer, "page", None)
+    if page is not None:
+        return getattr(page, name, None)
+    return None
+
+
+def _append_paged_kv_cache_compat(
+    k,
+    v,
+    kv_append_indptr,
+    kv_cache,
+    kv_page_indices,
+    kv_page_indptr,
+    kv_page_last_len,
+):
+    """
+    FlashInfer 0.6+ expects ``batch_indices`` and ``positions`` before the paged
+    cache tensors; older builds used the 7-tensor call only.
+
+    Our KV layout matches FlashInfer ``NHD``: ``kv_cache`` is
+    ``[max_num_pages, 2, page_size, n_heads, head_dim]``.
+    """
+    try:
+        flashinfer.append_paged_kv_cache(
+            k,
+            v,
+            kv_append_indptr,
+            kv_cache,
+            kv_page_indices,
+            kv_page_indptr,
+            kv_page_last_len,
+        )
+    except TypeError as e:
+        msg = str(e)
+        if not any(
+            s in msg
+            for s in (
+                "kv_last_page_len",
+                "batch_indices",
+                "positions",
+            )
+        ):
+            raise
+        get_seq_lens = _flashinfer_page_fn("get_seq_lens")
+        get_batch_indices_positions = _flashinfer_page_fn("get_batch_indices_positions")
+        if get_seq_lens is None or get_batch_indices_positions is None:
+            raise RuntimeError(
+                "flashinfer.append_paged_kv_cache requires get_seq_lens / "
+                "get_batch_indices_positions; upgrade flashinfer or pin an older API."
+            ) from e
+        # NHD: page_size is dim 2 of fused K/V cache tensor.
+        page_size = int(kv_cache.size(2))
+        nnz_kv = int(k.size(0))
+        seq_lens = get_seq_lens(kv_page_indptr, kv_page_last_len, page_size)
+        try:
+            batch_indices, positions = get_batch_indices_positions(
+                kv_append_indptr, seq_lens, nnz_kv
+            )
+        except TypeError:
+            # Some builds expect ``nnz`` as a 0-dim tensor.
+            batch_indices, positions = get_batch_indices_positions(
+                kv_append_indptr,
+                seq_lens,
+                torch.tensor(nnz_kv, device=k.device, dtype=torch.int32),
+            )
+        flashinfer.append_paged_kv_cache(
+            k,
+            v,
+            batch_indices,
+            positions,
+            kv_cache,
+            kv_page_indices,
+            kv_page_indptr,
+            kv_page_last_len,
+        )
+
 # Copied from transformers.models.llama.modeling_llama.repeat_kv
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
     """
@@ -43,7 +125,7 @@ def update_kv(
             kv_page_indptr,
             kv_page_last_len,
         ):
-        flashinfer.append_paged_kv_cache(
+        _append_paged_kv_cache_compat(
             k,
             v,
             kv_append_indptr,
