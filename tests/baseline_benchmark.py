@@ -5,7 +5,13 @@ sys.path.append("..")
 from pathlib import Path
 import torch.distributed as dist
 from MagicDec.Engine.utils import setup_seed, sampling_argmax_batch, cuda_graph_for_sampling_argmax_batch
-from MagicDec.Data.data_converter import convert_pg19_dataset
+from MagicDec.Data.data_converter import (
+    convert_pg19_dataset,
+    convert_aime2025_dataset,
+    convert_codeelo_dataset,
+    convert_longbench_v1_dataset,
+    convert_longbench_v2_dataset,
+)
 from transformers import AutoTokenizer
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
@@ -21,6 +27,7 @@ parser.add_argument('--prefix_len', type=int, default=8065, help='Prefix length'
 parser.add_argument('--max_len', type=int, default=8192, help='Generate length')
 
 parser.add_argument('--seed', type=int, default=123, help='Random seed.')
+parser.add_argument('--dataset', type=str, default="pg19", help='Dataset name.')
 
 parser.add_argument('--compile', action='store_true', help='Whether to compile the model.')
 parser.add_argument('--rank_group', nargs='+', type=int, help='Target group of ranks')
@@ -64,7 +71,21 @@ else:
     eot_2 = tokenizer.encode("<|eot_id|>")[-1]
 print(f"eot_1: {eot_1}, eot_2: {eot_2}")
 
-dataset = convert_pg19_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+if args.dataset == "pg19":
+    dataset = convert_pg19_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "aime2025":
+    dataset = convert_aime2025_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "codeelo":
+    dataset = convert_codeelo_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "longbench-v2":
+    dataset = convert_longbench_v2_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset.startswith("longbench-v1"):
+    task_name = "narrativeqa"
+    if ":" in args.dataset:
+        task_name = args.dataset.split(":", 1)[1]
+    dataset = convert_longbench_v1_dataset(tokenizer=tokenizer, seq_len=args.prefix_len, task_name=task_name)
+else:
+    raise ValueError(f"Unknown dataset {args.dataset}")
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
 num_eval_steps = min(10, len(dataloader))
 

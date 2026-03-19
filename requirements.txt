@@ -1,6 +1,6 @@
-transformers==4.36.2
+transformers>=4.56.0,<5
 numpy==1.26.3
-protobuf
+protobuf>=5.29.6
 sentencepiece
 datasets==2.16.1
 tiktoken

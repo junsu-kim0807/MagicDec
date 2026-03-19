@@ -5,7 +5,14 @@ sys.path.append("..")
 from pathlib import Path
 import torch.distributed as dist
 from MagicDec.Engine.utils import setup_seed, cuda_graph_for_sampling_argmax_batch, sampling_argmax_batch
-from MagicDec.Data.data_converter import convert_pg19_dataset
+from MagicDec.Data.data_converter import (
+    convert_pg19_dataset,
+    convert_aime2025_dataset,
+    convert_codeelo_dataset,
+    convert_longbench_v1_dataset,
+    convert_longbench_v2_dataset,
+    repeat_dataset_to_min_len,
+)
 from transformers import AutoTokenizer
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
@@ -115,18 +122,36 @@ else:
 print(f"eot_1: {eot_1}, eot_2: {eot_2}")
 if args.dataset == "pg19":
     dataset = convert_pg19_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "aime2025":
+    dataset = convert_aime2025_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "codeelo":
+    dataset = convert_codeelo_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "longbench-v2":
+    dataset = convert_longbench_v2_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset.startswith("longbench-v1"):
+    # Support: --dataset longbench-v1:narrativeqa
+    task_name = "narrativeqa"
+    if ":" in args.dataset:
+        task_name = args.dataset.split(":", 1)[1]
+    dataset = convert_longbench_v1_dataset(tokenizer=tokenizer, seq_len=args.prefix_len, task_name=task_name)
 else:
     raise ValueError(f"Unknown dataset {args.dataset}")
+
+dataset = repeat_dataset_to_min_len(dataset, BATCH_SIZE * 2)
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
 num_eval_steps = min(10, len(dataloader))
 
 total_time = 0.0
 num_gen_tokens = 0
 target_steps = 0
+sample_time = []
 if benchmark:
     draft_time = 0.0
     target_time = 0.0
     verify_loop = 0.0
+    draft_time_list = []
+    verification_time_list = []
+    kv_cache_compression_time_list = []
 
 for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
     if step >= num_eval_steps:
@@ -140,12 +165,22 @@ for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
     num_nodes += input_ids.shape[1]
 
     tokens_buffer[:, :1] = engine.encode(input_ids=input_ids)[:,-1:]
+    kv_cache_compression_time = 0.0
+    if benchmark:
+        torch.cuda.synchronize()
+        kv_t0 = time.time()
     if not use_tp:
         draft.encode(input_ids=input_ids)
     else:
         if rank in args.draft_rank_group:
             draft.encode(input_ids=input_ids)
         dist.barrier()
+    if benchmark:
+        torch.cuda.synchronize()
+        kv_t1 = time.time()
+        kv_cache_compression_time = kv_t1 - kv_t0
+        if step >= 5:
+            kv_cache_compression_time_list.append(kv_cache_compression_time)
 
         
     next_double = False
@@ -192,7 +227,10 @@ for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
         if benchmark:
             torch.cuda.synchronize()
             t2 = time.time()
-            draft_time+=t2-t1
+            delta_draft = t2 - t1
+            draft_time += delta_draft
+            if step >= 5:
+                draft_time_list.append(delta_draft)
 
         # Target Verification
         target_tokens = engine.inference(tokens_buffer)
@@ -200,9 +238,12 @@ for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
         if benchmark:
             torch.cuda.synchronize()
             t3 = time.time()
-            target_time+=t3-t2
-            
-        target_steps+=1
+            delta_verification = t3 - t2
+            target_time += delta_verification
+            if step >= 5:
+                verification_time_list.append(delta_verification)
+
+        target_steps += 1
 
 
     # Verify loop
@@ -284,7 +325,10 @@ for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
             if benchmark:
                 torch.cuda.synchronize()
                 t4 = time.time()
-                verify_loop += t4-t3
+                delta_sample = t4 - t3
+                verify_loop += delta_sample
+                if step >= 5:
+                    sample_time.append(delta_sample)
         else:
             for i in range(BATCH_SIZE):
                 output[i, num_nodes[i]] = bonus_tokens[i]
@@ -292,7 +336,10 @@ for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
             if benchmark:
                 torch.cuda.synchronize()
                 t4 = time.time()
-                verify_loop += t4-t3
+                delta_sample = t4 - t3
+                verify_loop += delta_sample
+                if step >= 5:
+                    sample_time.append(delta_sample)
 
     torch.cuda.synchronize()
     end=time.perf_counter()
@@ -305,6 +352,7 @@ for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
     print("total time :{:.5f}s, time per iter :{:.5f}s, decoding step: {}, large model step: {}, avg latency: {}".format(total_time, total_time / target_steps, num_gen_tokens, target_steps, total_time / num_gen_tokens * BATCH_SIZE))
     if benchmark:
         print("target time :{:.5f}s, draft time :{:.5f}s, verify loop : {}, avg generate len per sentence: {}".format(target_time/target_steps, draft_time / target_steps, verify_loop/target_steps, num_gen_tokens/target_steps/BATCH_SIZE))
+
     if step < 5:   # TODO: revert to 10?
         total_time = 0.0
         num_gen_tokens = 0
@@ -317,6 +365,15 @@ for step, batch in tqdm(enumerate(dataloader), total=num_eval_steps):
         dist.barrier()
 
 print(f"Final tokens per second :{num_gen_tokens/total_time}")
+if benchmark:
+    if len(sample_time) > 0:
+        print(f"sample_time (accept/reject) n={len(sample_time)}, avg={sum(sample_time)/len(sample_time):.6f}s")
+    if len(verification_time_list) > 0:
+        print(f"verification_time n={len(verification_time_list)}, avg={sum(verification_time_list)/len(verification_time_list):.6f}s")
+    if len(draft_time_list) > 0:
+        print(f"draft_time n={len(draft_time_list)}, avg={sum(draft_time_list)/len(draft_time_list):.6f}s")
+    if len(kv_cache_compression_time_list) > 0:
+        print(f"kv_cache_compression_time per outer step n={len(kv_cache_compression_time_list)}, avg={sum(kv_cache_compression_time_list)/len(kv_cache_compression_time_list):.6f}s")
 
 # if rank == 0:
 #     with open("result.txt", "a") as file:

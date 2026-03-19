@@ -5,7 +5,14 @@ sys.path.append("..")
 from pathlib import Path
 import torch.distributed as dist
 from MagicDec.Engine.utils import setup_seed, cuda_graph_for_sampling_argmax_batch, sampling_argmax_batch
-from MagicDec.Data.data_converter import convert_pg19_dataset
+from MagicDec.Data.data_converter import (
+    convert_pg19_dataset,
+    convert_aime2025_dataset,
+    convert_codeelo_dataset,
+    convert_longbench_v1_dataset,
+    convert_longbench_v2_dataset,
+    repeat_dataset_to_min_len,
+)
 from transformers import AutoTokenizer
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
@@ -112,8 +119,22 @@ else:
 print(f"eot_1: {eot_1}, eot_2: {eot_2}")
 if args.dataset == "pg19":
     dataset = convert_pg19_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "aime2025":
+    dataset = convert_aime2025_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "codeelo":
+    dataset = convert_codeelo_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset == "longbench-v2":
+    dataset = convert_longbench_v2_dataset(tokenizer=tokenizer, seq_len=args.prefix_len)
+elif args.dataset.startswith("longbench-v1"):
+    # Support: --dataset longbench-v1:narrativeqa
+    task_name = "narrativeqa"
+    if ":" in args.dataset:
+        task_name = args.dataset.split(":", 1)[1]
+    dataset = convert_longbench_v1_dataset(tokenizer=tokenizer, seq_len=args.prefix_len, task_name=task_name)
 else:
     raise ValueError(f"Unknown dataset {args.dataset}")
+
+dataset = repeat_dataset_to_min_len(dataset, BATCH_SIZE * 2)
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
 num_eval_steps = min(10, len(dataloader))
 

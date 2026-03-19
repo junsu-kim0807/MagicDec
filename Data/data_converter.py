@@ -55,6 +55,136 @@ def convert_pg19_dataset(tokenizer, seq_len = 4096, end = 20):
     data = torch.cat(tokenized_prompts, dim=0).repeat(end,1)
     return TensorDataset(data)
 
+
+def _tokenize_to_fixed_chunks(tokenizer, texts, seq_len: int, end_repeat: int = 20):
+    """
+    Create a TensorDataset of shape [N, seq_len] by padding/truncating tokenized texts.
+    This mirrors the benchmark scripts' expectation that input_ids length == prefix_len.
+    """
+    bos_id = tokenizer.bos_token_id if tokenizer.bos_token_id is not None else tokenizer.eos_token_id
+    pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+
+    token_tensors = []
+    for text in tqdm(texts):
+        token_ids = tokenizer.encode(text, add_special_tokens=False)
+        if len(token_ids) == 0:
+            token_ids = [pad_id]
+
+        # Truncate or pad to fixed seq_len
+        if len(token_ids) >= seq_len:
+            chunk = token_ids[:seq_len]
+        else:
+            chunk = token_ids + [pad_id] * (seq_len - len(token_ids))
+
+        # Ensure BOS at the first position (keep behavior consistent with pg19 converter)
+        chunk[0] = bos_id
+        token_tensors.append(torch.tensor(chunk, dtype=torch.long))
+
+    if len(token_tensors) == 0:
+        # Fallback: at least one example to avoid empty dataloader
+        token_tensors = [torch.tensor([bos_id] + [pad_id] * (seq_len - 1), dtype=torch.long)]
+
+    data = torch.stack(token_tensors, dim=0).repeat(end_repeat, 1)
+    return TensorDataset(data)
+
+
+def convert_aime2025_dataset(tokenizer, seq_len: int = 4096, end: int = 20):
+    """
+    AIME 2025 problems from HF: math-ai/aime25
+    Produces "Problem: ...\\nAnswer:" prompts for throughput evaluation.
+    """
+    dataset = load_dataset("math-ai/aime25", split="test")
+    texts = [f"Problem: {row['problem']}\\nAnswer:" for row in dataset]
+    return _tokenize_to_fixed_chunks(tokenizer, texts=texts, seq_len=seq_len, end_repeat=end)
+
+
+def convert_codeelo_dataset(tokenizer, seq_len: int = 4096, end: int = 20):
+    """
+    CodeElo prompts from HF: Qwen/CodeElo
+    Uses description + input (+interaction/note if present) as the prompt.
+    """
+    dataset = load_dataset("Qwen/CodeElo", split="train")
+
+    texts = []
+    for row in dataset:
+        parts = []
+        if row.get("description"):
+            parts.append(str(row["description"]))
+        if row.get("input"):
+            parts.append(str(row["input"]))
+        if row.get("interaction"):
+            if row.get("interaction"):
+                parts.append(str(row["interaction"]))
+        if row.get("note"):
+            if row.get("note"):
+                parts.append(str(row["note"]))
+        parts.append("Answer:")
+        texts.append("\\n\\n".join(parts))
+
+    return _tokenize_to_fixed_chunks(tokenizer, texts=texts, seq_len=seq_len, end_repeat=end)
+
+
+def convert_longbench_v2_dataset(tokenizer, seq_len: int = 4096, end: int = 20):
+    """
+    LongBench-v2 prompts from HF: THUDM/LongBench-v2 (only 'train' split exists)
+    Uses context + question + multiple-choice options.
+    """
+    dataset = load_dataset("THUDM/LongBench-v2", split="train")
+    texts = []
+    for row in dataset:
+        context = row.get("context") or ""
+        question = row.get("question") or row.get("input") or ""
+        choices = []
+        for letter in ["A", "B", "C", "D"]:
+            key = f"choice_{letter}"
+            val = row.get(key)
+            if val:
+                choices.append(f"{letter}) {val}")
+        prompt = context + "\n\n" + f"Question: {question}\n" + ("\n".join(choices) + "\n" if choices else "") + "Answer:"
+        texts.append(prompt)
+    return _tokenize_to_fixed_chunks(tokenizer, texts=texts, seq_len=seq_len, end_repeat=end)
+
+
+def convert_longbench_v1_dataset(tokenizer, seq_len: int = 4096, task_name: str = "narrativeqa", end: int = 20):
+    """
+    LongBench-v1 prompts from HF: THUDM/LongBench (requires task_name config, loaded from 'test' split).
+    Docs format includes: input, context, answers (list), dataset, language, _id.
+    """
+    dataset = load_dataset("THUDM/LongBench", task_name, split="test")
+    texts = []
+    for row in dataset:
+        inp = row.get("input") or ""
+        ctx = row.get("context") or ""
+        prompt = (inp + "\n\n" + ctx + "\n\n" if ctx else inp + "\n") + "Answer:"
+        texts.append(prompt)
+    return _tokenize_to_fixed_chunks(tokenizer, texts=texts, seq_len=seq_len, end_repeat=end)
+
+
+def repeat_dataset_to_min_len(dataset, min_len: int):
+    """
+    Repeat (and truncate) a TensorDataset so that len(dataset) >= min_len.
+    This is useful for benchmarks where drop_last=True and we want at least 2 batches.
+    """
+    if len(dataset) >= min_len:
+        return dataset
+
+    # TensorDataset provides `.tensors` (tuple of tensors).
+    # All tensors share the same first dimension length.
+    if not hasattr(dataset, "tensors"):
+        raise TypeError("repeat_dataset_to_min_len expects a torch.utils.data.TensorDataset")
+
+    target_len = int(min_len)
+    base_len = len(dataset)
+    reps = (target_len + base_len - 1) // base_len
+
+    repeated_tensors = []
+    for t in dataset.tensors:
+        # Repeat on dim=0 only, keep other dims.
+        reps_shape = (reps,) + (1,) * (t.dim() - 1)
+        repeated_tensors.append(t.repeat(*reps_shape)[:target_len])
+
+    return TensorDataset(*repeated_tensors)
+
 # def convert_ruler_dataset(tokenizer, task, model_name, seq_len = 4096, subset = "validation"):
 #     curr_folder = os.path.dirname(os.path.abspath(__file__))
 #     try:
