@@ -330,11 +330,25 @@ PAIRS: list[PairConfig] = [
     ),
 ]
 
+# Optional quick-test set (used with --test)
+TEST_PAIRS: list[PairConfig] = [
+    PairConfig(
+        pair_id="llama32_1b_to_llama32_3b",
+        draft_model="meta-llama/Llama-3.2-1B-Instruct",
+        target_model="meta-llama/Llama-3.2-3B-Instruct",
+        tp_size=1,
+        gpu_count=1,
+        note="Llama small->small",
+    )
+]
+
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate Slurm jobs for longspec torchrun.")
-    parser.add_argument("--batch-sizes", default="64", help="Comma-separated batch sizes, e.g. '1,4,16'.")
+    parser.add_argument("--batch", action="store_true", help="Use default batch sweep: 1,4,16,64,256,512,1024.")
+    parser.add_argument("--test", action="store_true", help="Generate jobs only for TEST_PAIRS.")
+    parser.add_argument("--batch-sizes", default=None, help="Comma-separated batch sizes, e.g. '1,4,16'.")
     parser.add_argument(
         "--datasets",
         nargs="*",
@@ -376,8 +390,14 @@ def main() -> None:
     ensure_dir(LOGS_ROOT)
     ensure_dir(RESULTS_ROOT)
 
-    batch_sizes = [int(x) for x in args.batch_sizes.split(",") if x.strip()]
+    if args.batch:
+        batch_sizes = [1, 4, 16, 64, 256, 512, 1024]
+    elif args.batch_sizes:
+        batch_sizes = [int(x) for x in args.batch_sizes.split(",") if x.strip()]
+    else:
+        batch_sizes = [64]
     datasets = args.datasets
+    selected_pairs = TEST_PAIRS if args.test else PAIRS
 
     # Dataset args expected by longspec_benchmark.py:
     # - longbench-v1 tasks: longbench-v1:<task_name>
@@ -415,7 +435,7 @@ def main() -> None:
                 max_len = dataset_to_max_len[ds_short]
                 time_limit = time_limit_for_dataset(ds_short)
 
-                for pair in PAIRS:
+                for pair in selected_pairs:
                     slug = pair_slug(pair.draft_model, pair.target_model)
                     draft_display_name = pair.draft_model.split("/", 1)[1]
                     target_display_name = pair.target_model.split("/", 1)[1]
