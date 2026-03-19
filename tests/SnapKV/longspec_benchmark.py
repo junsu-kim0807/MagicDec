@@ -23,7 +23,40 @@ from MagicDec.Engine.SnapKV.backend import LMBackend
 from MagicDec.Engine.SnapKV.backend_draft import LMBackend_Draft
 
 
-def resolve_checkpoint_arg(arg_value) -> Path:
+def _model_root_candidates() -> list[Path]:
+    roots: list[Path] = []
+    env_root = os.environ.get("MODELS_ROOT")
+    if env_root:
+        roots.append(Path(env_root))
+    roots.extend([
+        Path.home() / "scratch" / "models",
+        Path("/scratch/models"),
+        Path.home() / ".cache" / "magicdec" / "models",
+    ])
+    uniq: list[Path] = []
+    seen: set[str] = set()
+    for r in roots:
+        s = str(r)
+        if s not in seen:
+            seen.add(s)
+            uniq.append(r)
+    return uniq
+
+
+def _pick_writable_model_root() -> Path:
+    for root in _model_root_candidates():
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+            probe = root / ".write_test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            return root
+        except Exception:
+            continue
+    raise PermissionError("No writable model root found. Set MODELS_ROOT to a writable path.")
+
+
+def resolve_checkpoint_arg(arg_value, force_download: bool = False) -> Path:
     """
     Resolve --model/--target value to a local checkpoint file path.
 
@@ -85,14 +118,24 @@ def resolve_checkpoint_arg(arg_value) -> Path:
                 return link_path
 
         # Fallback: download and convert to model.pth automatically.
-        models_root = Path(os.environ.get("MODELS_ROOT", "/scratch/models"))
+        existing_ckpt: Path | None = None
+        for root in _model_root_candidates():
+            cand = root / org / name / "model.pth"
+            if cand.is_file():
+                existing_ckpt = cand
+                break
+        if existing_ckpt is not None and not force_download:
+            print(f"Resolved repo id {raw} -> {existing_ckpt} (existing converted checkpoint)")
+            return existing_ckpt
+
+        models_root = _pick_writable_model_root()
         local_ckpt_dir = models_root / org / name
         local_ckpt_file = local_ckpt_dir / "model.pth"
 
         should_sync = dist.is_available() and dist.is_initialized()
         is_rank0 = (not should_sync) or dist.get_rank() == 0
 
-        if is_rank0 and not local_ckpt_file.is_file():
+        if is_rank0 and (force_download or not local_ckpt_file.is_file()):
             local_ckpt_dir.mkdir(parents=True, exist_ok=True)
             print(f"Downloading {raw} to {local_ckpt_dir} ...")
             from download import hf_download
@@ -118,9 +161,9 @@ def resolve_checkpoint_arg(arg_value) -> Path:
 
 
 parser = argparse.ArgumentParser(description='Process model configuration and partitions.')
-parser.add_argument('--model', type=str, default="/scratch/models/meta-llama/Llama-3.2-1B/model.pth", help='model')
+parser.add_argument('--model', type=str, default=str(Path.home() / "scratch/models/meta-llama/Llama-3.2-1B/model.pth"), help='model')
 # parser.add_argument('--model', type=Path, default=Path("/scratch/models/meta-llama/Meta-Llama-3.1-8B/model.pth"), help='model')
-parser.add_argument('--target', type=str, default="/scratch/models/meta-llama/Meta-Llama-3.1-8B/model.pth", help='model')
+parser.add_argument('--target', type=str, default=str(Path.home() / "scratch/models/meta-llama/Meta-Llama-3.1-8B/model.pth"), help='model')
 parser.add_argument('--model_name', type=str, default="meta-llama/Meta-Llama-3.1-8B", help='model name')
 parser.add_argument('--dataset', type=str, default="pg19", help='Dataset name.')
 parser.add_argument('--draft_budget', type=int, default=-1, help='Dataset end index.')
@@ -187,7 +230,12 @@ target_dec_len = args.gamma + 1
 
 # Load target model
 engine = LMBackend(dtype=DTYPE, device=DEVICE, dec_len=target_dec_len)
-engine.load_model(checkpoint_path, use_tp=use_tp, rank_group = args.rank_group, group=global_group)
+try:
+    engine.load_model(checkpoint_path, use_tp=use_tp, rank_group=args.rank_group, group=global_group)
+except Exception as e:
+    print(f"Target model load failed once ({e}); retrying after forced download+convert ...")
+    checkpoint_path = resolve_checkpoint_arg(args.target, force_download=True)
+    engine.load_model(checkpoint_path, use_tp=use_tp, rank_group=args.rank_group, group=global_group)
 if args.compile:
     engine.compile()
 engine.setup_caches(max_batch_size=BATCH_SIZE, max_seq_length=MAX_LEN_TARGET)
@@ -195,14 +243,24 @@ engine.setup_caches(max_batch_size=BATCH_SIZE, max_seq_length=MAX_LEN_TARGET)
 # Load draft model
 if not use_tp:
     draft = LMBackend_Draft(dtype=DTYPE, device=DEVICE, draft_budget=args.draft_budget)
-    draft.load_model(draft_checkpoint_path, use_tp=False)
+    try:
+        draft.load_model(draft_checkpoint_path, use_tp=False)
+    except Exception as e:
+        print(f"Draft model load failed once ({e}); retrying after forced download+convert ...")
+        draft_checkpoint_path = resolve_checkpoint_arg(args.model, force_download=True)
+        draft.load_model(draft_checkpoint_path, use_tp=False)
     if args.compile:
         draft.compile()
     draft.setup_caches(max_batch_size=BATCH_SIZE, max_seq_length=MAX_LEN_TARGET, draft_budget=args.draft_budget)
 else:
     if rank in args.draft_rank_group:
         draft = LMBackend_Draft(dtype=DTYPE, device=DEVICE, draft_budget=args.draft_budget)
-        draft.load_model(draft_checkpoint_path, use_tp=draft_tp, rank_group=args.draft_rank_group, group=draft_group)
+        try:
+            draft.load_model(draft_checkpoint_path, use_tp=draft_tp, rank_group=args.draft_rank_group, group=draft_group)
+        except Exception as e:
+            print(f"Draft model load failed once ({e}); retrying after forced download+convert ...")
+            draft_checkpoint_path = resolve_checkpoint_arg(args.model, force_download=True)
+            draft.load_model(draft_checkpoint_path, use_tp=draft_tp, rank_group=args.draft_rank_group, group=draft_group)
         if args.compile:
             draft.compile()
         draft.setup_caches(max_batch_size=BATCH_SIZE, max_seq_length=MAX_LEN_TARGET, draft_budget=args.draft_budget)

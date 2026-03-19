@@ -20,8 +20,8 @@ from pathlib import Path
 
 
 # User/cluster layout (overrideable)
-REPO_DIR = os.environ.get("REPO_DIR", str(Path(__file__).resolve().parent))
-VENV_DIR = os.environ.get("VENV_DIR", "/home/jhwoo36/scratch/venvs/vllm")
+REPO_DIR = os.environ.get("REPO_DIR", "/home/junsuk87/scratch/specdec/MagicDec")
+VENV_DIR = os.environ.get("VENV_DIR", "/project/def-pnair/junsu/kv_cache/.venv")
 
 REPO_ROOT = Path(REPO_DIR)
 JOBS_ROOT = REPO_ROOT / "scripts" / "jobs" / "spec_decode"
@@ -35,7 +35,7 @@ RESULTS_ROOT = REPO_ROOT / "results" / "spec_decode"
 # temporary directory so that:
 #   - the checkpoint file path is stable for the engine
 #   - the checkpoint parent directory name matches transformer_config keys
-MODELS_ROOT = "/scratch/models"
+MODELS_ROOT = str(Path.home() / "scratch/models")
 
 
 @dataclass(frozen=True)
